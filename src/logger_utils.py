@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 from pythonjsonlogger import jsonlogger
 
 # Configure the logger
@@ -27,3 +28,27 @@ def log_and_store(event, level="info"):
     """
     log_events.append(event)
     getattr(logger, level)(event)
+
+
+def safe_decimal(value):
+    if value is None:
+        return None
+    if isinstance(value, float):
+        return Decimal(str(round(value, 4)))
+    return value
+
+def safe_dynamodb_value(value):
+    from decimal import Decimal
+    import datetime
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, float):
+        return Decimal(str(value))
+    if isinstance(value, int):
+        return Decimal(value)
+    if isinstance(value, datetime.date):
+        return value.isoformat()  # e.g., "2025-03-30"
+    if isinstance(value, datetime.datetime):
+        return value.isoformat()
+    return value
+
