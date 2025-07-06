@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from decimal import Decimal
 from pyspark.sql.types import StructType
-from logger_utils import logger, log_and_store, log_events
+from logger_utils import logger, log_and_store, log_events, safe_decimal, safe_dynamodb_value
 
 # AWS setup
 s3 = boto3.client("s3")
@@ -16,7 +16,22 @@ CATEGORY_TABLE = dynamodb.Table("ecommerce_category_kpis")
 ORDER_TABLE = dynamodb.Table("ecommerce_order_kpis")
 
 # Spark setup
-spark = SparkSession.builder.appName("KPI-Transformer").getOrCreate()
+spark = (
+    SparkSession.builder
+    .appName("KPI-Transformer")
+    .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+    .config("spark.hadoop.fs.s3a.aws.credentials.provider",
+            "com.amazonaws.auth.DefaultAWSCredentialsProviderChain")
+    .config("spark.hadoop.fs.s3a.connection.maximum", "100")
+    .config("spark.hadoop.fs.s3a.connection.timeout", "60000")
+    .config("spark.hadoop.fs.s3a.connection.establish.timeout", "5000")
+    .config("spark.hadoop.fs.s3a.connection.request.timeout", "60000")
+    .config("spark.hadoop.fs.s3a.attempts.maximum", "5")
+    .config("spark.hadoop.fs.s3a.retry.limit", "5")
+    .config("spark.hadoop.fs.s3a.retry.interval", "2000")
+    .getOrCreate()
+)
+
 spark.sparkContext.setLogLevel("WARN")
 
 
@@ -35,34 +50,37 @@ def read_csvs(prefix):
     keys = list_csv_files(prefix)
     if not keys:
         return spark.createDataFrame([], StructType()), []
-    dfs = [spark.read.csv(f"s3a://{BUCKET_NAME}/{key}", header=True, inferSchema=True) for key in keys]
-    return dfs[0].unionAll(*dfs[1:]) if len(dfs) > 1 else dfs[0], keys
+    df = spark.read.csv(f"s3a://{BUCKET_NAME}/{keys[0]}", header=True, inferSchema=True)
+    for key in keys[1:]:
+        next_df = spark.read.csv(f"s3a://{BUCKET_NAME}/{key}", header=True, inferSchema=True)
+        df = df.union(next_df)
+    return df, keys
 
 
 def compute_category_kpis(df):
-    df = df.withColumn("order_date", to_date(col("created_at")))
+    df = df.withColumn("order_date", to_date(col("order_created_at")))
     return df.groupBy("category", "order_date").agg(
         _sum("sale_price").alias("daily_revenue"),
         avg("sale_price").alias("avg_order_value"),
-        expr("AVG(CASE WHEN status = 'returned' THEN 1 ELSE 0 END)").alias("return_rate")
+        expr("AVG(CASE WHEN order_status = 'returned' THEN 1 ELSE 0 END)").alias("return_rate")
     )
 
 
 def compute_order_kpis(df):
-    df = df.withColumn("order_date", to_date(col("created_at")))
-    return df.groupBy("order_date").agg(
+    df = df.withColumn("order_date", to_date(col("order_created_at")))
+    result = df.groupBy("order_date").agg(
         countDistinct("order_id").alias("total_orders"),
         _sum("sale_price").alias("total_revenue"),
         count("order_item_id").alias("total_items_sold"),
-        expr("AVG(CASE WHEN status = 'returned' THEN 1 ELSE 0 END)").alias("return_rate"),
+        expr("AVG(CASE WHEN order_status = 'returned' THEN 1 ELSE 0 END)").alias("return_rate"),
         countDistinct("user_id").alias("unique_customers")
     )
+    return result.withColumn("summary", expr("'daily_summary'"))
 
 
 def write_to_dynamo(df, table, schema_map):
     for row in df.collect():
-        item = {k: (Decimal(str(getattr(row, v))) if isinstance(getattr(row, v), float) else getattr(row, v))
-                for k, v in schema_map.items()}
+        item = {k: safe_dynamodb_value(getattr(row, v)) for k, v in schema_map.items()}
         table.put_item(Item=item)
 
 
@@ -121,10 +139,20 @@ def main():
             write_log_to_s3()
             return
 
-    merged_orders = order_items_df.join(
-        orders_df.select("order_id", "created_at", "status", "user_id"),
+    merged_orders = (
+    order_items_df
+    .withColumnRenamed("user_id", "order_item_user_id")
+    .withColumnRenamed("id", "order_item_id")
+    .join(
+        orders_df.selectExpr(
+            "order_id",
+            "created_at as order_created_at",
+            "status as order_status",
+            "user_id"
+        ),
         on="order_id"
-    ).withColumnRenamed("id", "order_item_id")
+    )
+)
 
     joined_df = merged_orders.join(
         products_df.select("id", "category"),
