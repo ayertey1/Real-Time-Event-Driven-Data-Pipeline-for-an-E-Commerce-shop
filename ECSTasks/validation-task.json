@@ -1,0 +1,24 @@
+{
+  "family": "validation-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::143320676204:role/ecsTaskExecutionRole-ecomm",
+  "taskRoleArn": "arn:aws:iam::143320676204:role/ecsTaskExecutionRole-ecomm",
+  "containerDefinitions": [
+    {
+      "name": "validation",
+      "image": "143320676204.dkr.ecr.eu-north-1.amazonaws.com/validation:latest",
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/validation",
+          "awslogs-region": "eu-north-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

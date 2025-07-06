@@ -1,0 +1,24 @@
+{
+  "family": "transformation-task",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::143320676204:role/ecsTaskExecutionRole-ecomm",
+  "taskRoleArn": "arn:aws:iam::143320676204:role/ecsTaskExecutionRole-ecomm",
+  "containerDefinitions": [
+    {
+      "name": "transformation",
+      "image": "143320676204.dkr.ecr.eu-north-1.amazonaws.com/transformation:latest",
+      "essential": true,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/transformation",
+          "awslogs-region": "eu-north-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
