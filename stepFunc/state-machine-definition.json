@@ -1,0 +1,107 @@
+{
+  "Comment": "Enhanced Orchestration for Validation and Transformation ECS Tasks",
+  "StartAt": "Run Validation Task",
+  "States": {
+    "Run Validation Task": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "TimeoutSeconds": 300,
+      "Parameters": {
+        "LaunchType": "FARGATE",
+        "Cluster": "ecomm-pipeline-cluster",
+        "TaskDefinition": "arn:aws:ecs:eu-north-1:143320676204:task-definition/validation-task:1",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": [
+              "subnet-06d2be84233d1070b",
+              "subnet-00f79cf2efe162242",
+              "subnet-01932dd3c999ab69f"
+            ],
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "Overrides": {}
+      },
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Validation Failed"
+        }
+      ],
+      "Next": "Fetch Validation Result"
+    },
+    "Fetch Validation Result": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:eu-north-1:143320676204:function:FetchValidationResult",
+      "ResultPath": "$.validationResult",
+      "Next": "Check Validation Outcome"
+    },
+    "Check Validation Outcome": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.validationResult.validated",
+          "BooleanEquals": true,
+          "Next": "Wait Before Transform"
+        },
+        {
+          "Variable": "$.validationResult.validated",
+          "BooleanEquals": false,
+          "Next": "No Valid Files"
+        }
+      ],
+      "Default": "Validation Failed"
+    },
+    "Wait Before Transform": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Next": "Run Transformation Task"
+    },
+    "Run Transformation Task": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::ecs:runTask.sync",
+      "TimeoutSeconds": 600,
+      "Parameters": {
+        "LaunchType": "FARGATE",
+        "Cluster": "ecomm-pipeline-cluster",
+        "TaskDefinition": "arn:aws:ecs:eu-north-1:143320676204:task-definition/transformation-task:1",
+        "NetworkConfiguration": {
+          "AwsvpcConfiguration": {
+            "Subnets": [
+              "subnet-06d2be84233d1070b",
+              "subnet-00f79cf2efe162242",
+              "subnet-01932dd3c999ab69f"
+            ],
+            "AssignPublicIp": "ENABLED"
+          }
+        },
+        "Overrides": {}
+      },
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "Next": "Transformation Failed"
+        }
+      ],
+      "End": true
+    },
+    "No Valid Files": {
+      "Type": "Succeed",
+      "Comment": "No valid files found, ending execution gracefully."
+    },
+    "Validation Failed": {
+      "Type": "Fail",
+      "Error": "ValidationError",
+      "Cause": "Validation task failed or returned unexpected result."
+    },
+    "Transformation Failed": {
+      "Type": "Fail",
+      "Error": "TransformationError",
+      "Cause": "Transformation task failed."
+    }
+  }
+}
