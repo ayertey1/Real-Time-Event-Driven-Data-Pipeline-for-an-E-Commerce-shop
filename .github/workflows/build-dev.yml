@@ -15,4 +15,4 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -f dockerfile/Dockerfile.transformation -t transformation:latest .
+          docker build -f dockerfiles/Dockerfile.transformation -t transformation:latest .
