@@ -31,7 +31,7 @@ jobs:
 
       - name: Build Docker image
         run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG -f dockerfile/Dockerfile.transformation .
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG -f dockerfiles/Dockerfile.transformation .
 
       - name: Tag Docker image
         run: |
