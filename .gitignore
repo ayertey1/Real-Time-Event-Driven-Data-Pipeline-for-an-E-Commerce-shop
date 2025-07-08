@@ -1,1 +1,5 @@
 .event-driven/
+src/__pycache__/
+config/
+jars/
+role/

@@ -1,0 +1,18 @@
+name: Build Docker Image (Dev)
+
+on:
+  push:
+    branches:
+      - devLab6
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -f dockerfiles/Dockerfile.transformation -t transformation:latest .

@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: DynamoDB tables for e-commerce KPIs
+
+Resources:
+  CategoryKPIsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ecommerce_category_kpis
+      AttributeDefinitions:
+        - AttributeName: category
+          AttributeType: S
+        - AttributeName: order_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: category
+          KeyType: HASH
+        - AttributeName: order_date
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+
+  OrderKPIsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ecommerce_order_kpis
+      AttributeDefinitions:
+        - AttributeName: order_date
+          AttributeType: S
+        - AttributeName: summary
+          AttributeType: S
+      KeySchema:
+        - AttributeName: order_date
+          KeyType: HASH
+        - AttributeName: summary
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
